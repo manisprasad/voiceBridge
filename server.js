@@ -11,7 +11,6 @@ const { Resampler } = require("@eliware/resampler");
 const { FishTTSClient } = require("./fish-tts");
 const { TwilioAudioPump } = require("./audio-pump");
 
-const DESTINATION_PHONE = "+918510994751";
 // Public-facing host used for TwiML/webhook URLs. On Railway/Render the
 // platform injects its own public URL, so prefer those over a hardcoded
 // ngrok domain. Any scheme is stripped since the code below adds
@@ -94,6 +93,7 @@ What you help with:
 Ending the call:
 - You have an end_call function. Call it once the conversation is genuinely finished - the customer says goodbye, confirms there's nothing else they need, or explicitly asks to hang up.
 - Always say a short, warm goodbye in your spoken reply FIRST, then call end_call in that same turn. Never call end_call silently without saying goodbye.
+- Never write the word "end_call", any JSON, or any function-call syntax in your reply text. The reply text is spoken aloud to the customer - it must only contain the words you want the customer to hear. To end the call, use the end_call function instead.
 - Don't call end_call while the customer still seems to be asking something or is mid-thought.`;
 
 // Spoken the moment the call connects, before the caller says anything.
@@ -104,11 +104,10 @@ const GREETING_TEXT =
 const SEPARATOR = "=".repeat(36);
 
 // Standard OpenAI-compatible function calling (Chat Completions format).
-// We rely ENTIRELY on the native structured `tool_calls` field in the
-// stream - no text-markup scanning of the reply content. That means the
-// model's spoken text (delta.content) is always safe to feed straight to
-// TTS with zero parsing overhead, and end_call is only ever detected via
-// delta.tool_calls / the final tool_calls accumulator.
+// We rely primarily on the native structured `tool_calls` field in the
+// stream, but smaller Groq models occasionally leak the call as plain
+// text instead (see extractEndCallLeak below) - that's what the text-side
+// guard exists for.
 const TOOLS = [
   {
     type: "function",
@@ -188,6 +187,29 @@ function trimHistory(history) {
   return [system, ...recent];
 }
 
+// Accepts common human-typed shapes (spaces, dashes, parens, missing "+")
+// and normalizes to E.164, or returns null if it still doesn't look like a
+// real phone number. Twilio itself will do final validation on top of
+// this - this is just to fail fast with a clear error instead of letting
+// a garbage string reach the Calls API.
+function normalizePhoneNumber(raw) {
+  if (typeof raw !== "string") {
+    return null;
+  }
+  let trimmed = raw.trim().replace(/[\s\-().]/g, "");
+  if (!trimmed) {
+    return null;
+  }
+  if (!trimmed.startsWith("+")) {
+    trimmed = `+${trimmed}`;
+  }
+  // E.164: "+" followed by 8-15 digits, first digit 1-9.
+  if (!/^\+[1-9]\d{7,14}$/.test(trimmed)) {
+    return null;
+  }
+  return trimmed;
+}
+
 function findSentenceEnd(text) {
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
@@ -207,7 +229,128 @@ function findSentenceEnd(text) {
   return -1;
 }
 
-// Common entry point for native tool_call detection. Kicks off the
+function findJsonObjectEnd(text, start) {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (ch === "\\") {
+        escaped = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+    } else if (ch === "{") {
+      depth++;
+    } else if (ch === "}") {
+      depth--;
+      if (depth === 0) {
+        return i;
+      }
+    }
+  }
+  return -1;
+}
+
+const END_CALL_TOKEN = "end_call";
+
+// Safety net for a SPECIFIC failure mode: smaller Groq models (llama-3.1-8b-
+// instant in particular) occasionally don't emit end_call through the
+// structured tool_calls delta at all - they just write the literal words
+// "end_call {"reason": "..."}" as normal spoken content. This only needs
+// to watch for ONE shape, since end_call is the only tool that exists.
+// Anything that could be a partially-streamed "end_call" (split across
+// token boundaries) is held back until the next delta proves it's either
+// a real leak or harmless prose, so a partial match is never spoken.
+function extractEndCallLeak(buffer) {
+  const calls = [];
+  let work = buffer;
+
+  while (true) {
+    const idx = work.toLowerCase().indexOf(END_CALL_TOKEN);
+    if (idx === -1) {
+      break;
+    }
+
+    // Look for a JSON object right after the token, tolerating the odd
+    // punctuation the model sometimes glues on (e.g. `end_call: {...}`).
+    let jsonStart = -1;
+    let i = idx + END_CALL_TOKEN.length;
+    for (; i < work.length; i++) {
+      const ch = work[i];
+      if (ch === "{") {
+        jsonStart = i;
+        break;
+      }
+      if (!/[\s:=]/.test(ch)) {
+        break;
+      }
+    }
+
+    if (jsonStart === -1) {
+      // No "{" found yet right after the token - either there never will
+      // be one (bare "end_call"), or the JSON just hasn't arrived yet in
+      // this delta. Hold everything from the token onward.
+      return { feedable: work.slice(0, idx), deferred: work.slice(idx), calls };
+    }
+
+    const jsonEnd = findJsonObjectEnd(work, jsonStart);
+    if (jsonEnd === -1) {
+      // JSON object is still incomplete - hold the whole marker back.
+      return { feedable: work.slice(0, idx), deferred: work.slice(idx), calls };
+    }
+
+    calls.push({ name: "end_call", args: work.slice(jsonStart, jsonEnd + 1) });
+    // Drop the leaked marker itself, plus any dangling punctuation right
+    // before it, from what actually gets spoken.
+    const before = work.slice(0, idx).replace(/[,;:\s]*$/, "");
+    const after = work.slice(jsonEnd + 1);
+    work = `${before} ${after}`.trim();
+  }
+
+  // Tail check: the buffer might end mid-way through typing "end_call"
+  // itself (e.g. "...call, end_c"). Hold back any suffix that's a genuine
+  // prefix of the token so it can never be partially spoken.
+  for (let i = 1; i < END_CALL_TOKEN.length; i++) {
+    const suffix = work.slice(-i).toLowerCase();
+    if (suffix === END_CALL_TOKEN.slice(0, i)) {
+      return { feedable: work.slice(0, work.length - i), deferred: work.slice(work.length - i), calls };
+    }
+  }
+
+  return { feedable: work, deferred: "", calls };
+}
+
+// Called once the stream is fully done and nothing more is coming. If
+// deferred text still contains "end_call" with no JSON ever having shown
+// up (a bare leak, no reason given), treat it as a no-args call and strip
+// the leaked word so it's never spoken - rather than holding it forever.
+function finalizeEndCallLeak(text) {
+  if (!text) {
+    return { text: "", call: null };
+  }
+  const { feedable, deferred, calls } = extractEndCallLeak(text);
+  if (calls.length) {
+    return { text: `${feedable} ${deferred}`.trim(), call: calls[0] };
+  }
+  const idx = deferred.toLowerCase().indexOf(END_CALL_TOKEN);
+  if (idx === -1) {
+    return { text: `${feedable}${deferred}`.trim(), call: null };
+  }
+  const before = deferred.slice(0, idx).replace(/[,;:\s]*$/, "");
+  const after = deferred.slice(idx + END_CALL_TOKEN.length).replace(/^[\s:={}",a-zA-Z]*/, "");
+  return { text: `${feedable} ${before} ${after}`.trim(), call: { name: "end_call", args: "" } };
+}
+
+// Common entry point for native tool_call detection AND text-leaked calls
+// caught by extractEndCallLeak/finalizeEndCallLeak. Kicks off the
 // hangup-once-audio-finishes sequence for end_call.
 function handleFunctionCall(ctx, call) {
   if (!ctx || !call || call.name !== "end_call") {
@@ -545,16 +688,10 @@ function ensureWarmRefreshTimer(ctx) {
 
 // Hands a pre-warmed, already-open session to a real turn, rebinding its
 // callbacks to that turn's genId. Falls back to the cold path if no warm
-// session exists yet or it failed to come up in time.
-//
-// FIX: previously the next warm session was only started in endTurn(),
-// which fires once the *current* turn's Fish session fully closes. If the
-// caller replied quickly, claimWarmFish could be called again before that
-// happened, finding warmFish === null and falling back to a cold connect
-// (this is what produced the 1826ms "TTS ready" outlier in the logs).
-// Now we re-arm the next warm session the INSTANT this one is claimed, so
-// there's always a connection in flight rather than one that only starts
-// after the previous turn's audio has entirely finished.
+// session exists yet or it failed to come up in time. Re-arms the next
+// warm session the INSTANT this one is claimed, so there's always a
+// connection in flight rather than one that only starts after the
+// previous turn's audio has entirely finished.
 async function claimWarmFish(ctx, genId) {
   const warm = ctx.warmFish;
   ctx.warmFish = null;
@@ -650,6 +787,18 @@ async function streamAssistantResponse(ctx, userText, genId) {
   let ttsReady = false;
   let ttsFailed = false;
 
+  // IMPORTANT: these are declared here, OUTSIDE the try block, on purpose.
+  // A `let` declared inside `try { ... }` is scoped to that block and is
+  // NOT visible inside the matching `catch (err) { ... }` block - that
+  // mismatch is exactly what caused an earlier "fullResponse is not
+  // defined" crash the first time Groq's tool-call validation failed
+  // mid-stream. Declaring them up here means the catch block (which needs
+  // to read fullResponse/ttsBuffer to salvage a goodbye line) can actually
+  // see them.
+  let fullResponse = "";
+  let spokenAccum = ""; // fullResponse with any leaked end_call text stripped out - this is what's safe to speak and safe to store in history
+  let ttsBuffer = "";
+
   try {
     let history = conversations.get(callSid) || [];
     history.push({ role: "user", content: userText });
@@ -658,12 +807,13 @@ async function streamAssistantResponse(ctx, userText, genId) {
 
     console.log("Assistant:");
 
-    let fullResponse = "";
-    let ttsBuffer = "";
-    // Text received from the LLM that hasn't been handed to TTS yet because
-    // the Fish socket isn't claimed yet. Plain spoken text only - no
-    // markup parsing needed since end_call arrives via native tool_calls.
+    // Text that's been cleared of any end_call leak but is waiting on the
+    // Fish socket to be claimed.
     let pending = "";
+    // Text held back because it MIGHT be a partially-streamed "end_call"
+    // leak - resolved (or proven harmless) by extractEndCallLeak as more
+    // deltas arrive.
+    let pendingExtract = "";
     // Accumulates a native (structured) tool_call across chat-completions
     // deltas.
     let toolCallAccum = null;
@@ -723,8 +873,7 @@ async function streamAssistantResponse(ctx, userText, genId) {
       }
       const delta = choice.delta || {};
 
-      // Native structured tool call deltas - this is the ONLY place
-      // end_call is detected from. No text scanning required.
+      // Native structured tool call deltas.
       if (delta.tool_calls && delta.tool_calls.length) {
         for (const tc of delta.tool_calls) {
           if (!toolCallAccum) {
@@ -753,18 +902,44 @@ async function streamAssistantResponse(ctx, userText, genId) {
       process.stdout.write(delta.content);
       fullResponse += delta.content;
 
-      // Plain spoken text, straight to TTS - nothing to strip out.
-      if (ttsReady && tts && ctx.currentGeneration === genId && ctx.fishSession === tts) {
-        ttsBuffer = feedTtsText(ctx, genId, tts, ttsBuffer, delta.content);
-        if (ctx.firstFlushLoggedGen === genId && !ctx.firstFlushAtMs) {
-          ctx.firstFlushAtGen = genId;
-          ctx.firstFlushAtMs = Date.now();
-        }
-      } else if (!ttsFailed) {
-        // TTS socket isn't claimed yet - hold the text, it'll be flushed
-        // as soon as ttsConnectPromise resolves above.
-        pending += delta.content;
+      // Guard against a leaked "end_call {...}" showing up as plain
+      // content instead of a proper tool_calls delta. Only the cleaned
+      // "feedable" text ever reaches TTS or spokenAccum.
+      const { feedable, deferred, calls } = extractEndCallLeak(pendingExtract + delta.content);
+      pendingExtract = deferred;
+      for (const call of calls) {
+        console.warn(`[groq] call ${callSid}: caught leaked end_call text, treating as tool call`);
+        handleFunctionCall(ctx, call);
       }
+
+      if (feedable) {
+        spokenAccum += feedable;
+        if (ttsReady && tts && ctx.currentGeneration === genId && ctx.fishSession === tts) {
+          ttsBuffer = feedTtsText(ctx, genId, tts, ttsBuffer, feedable);
+          if (ctx.firstFlushLoggedGen === genId && !ctx.firstFlushAtMs) {
+            ctx.firstFlushAtGen = genId;
+            ctx.firstFlushAtMs = Date.now();
+          }
+        } else if (!ttsFailed) {
+          // TTS socket isn't claimed yet - hold the text, it'll be flushed
+          // as soon as ttsConnectPromise resolves above.
+          pending += feedable;
+        }
+      }
+    }
+
+    // Stream is done - resolve any still-pending "end_call" tail (e.g. a
+    // bare leak with no JSON reason ever showed up) rather than silently
+    // dropping or speaking it.
+    const finalLeak = finalizeEndCallLeak(pendingExtract);
+    pendingExtract = "";
+    if (finalLeak.call) {
+      console.warn(`[groq] call ${callSid}: caught leaked end_call text at stream end, treating as tool call`);
+      handleFunctionCall(ctx, finalLeak.call);
+    }
+    if (finalLeak.text) {
+      spokenAccum += finalLeak.text;
+      pending += finalLeak.text;
     }
 
     // A native tool_call (if the model emitted one) triggers the hangup path.
@@ -780,8 +955,8 @@ async function streamAssistantResponse(ctx, userText, genId) {
       return;
     }
 
-    if (fullResponse.trim()) {
-      history.push({ role: "assistant", content: fullResponse.trim() });
+    if (spokenAccum.trim()) {
+      history.push({ role: "assistant", content: spokenAccum.trim() });
       conversations.set(callSid, history);
     }
 
@@ -824,20 +999,20 @@ async function streamAssistantResponse(ctx, userText, genId) {
       console.error(`[groq] request failed: ${err.message}`);
       // Groq occasionally rejects its own streamed end_call (e.g. a
       // truncated tool name in the validation phase) AFTER the model has
-      // already written its goodbye. That text is sitting in fullResponse/
-      // ttsBuffer and would otherwise be lost, leaving the caller on a live
-      // line forever. Since end_call is the only tool, a failure like this
-      // after a goodbye was produced means the call is over: speak the
-      // goodbye, then hang up once the audio finishes.
+      // already written its goodbye. That text is sitting in
+      // spokenAccum/ttsBuffer and would otherwise be lost, leaving the
+      // caller on a live line forever. Since end_call is the only tool, a
+      // failure like this after a goodbye was produced means the call is
+      // over: speak the goodbye, then hang up once the audio finishes.
       const isToolFail = /failed to call a function/i.test(err.message || "");
       if (
         isToolFail &&
-        fullResponse.trim() &&
+        spokenAccum.trim() &&
         tts &&
         ctx.currentGeneration === genId &&
         ctx.fishSession === tts
       ) {
-        const leftover = (ttsBuffer + fullResponse).trim();
+        const leftover = (ttsBuffer + spokenAccum).trim();
         if (leftover) {
           tts.sendText(leftover);
           tts.flush();
@@ -926,16 +1101,36 @@ function buildTwiml() {
   return voiceResponse.toString();
 }
 
+// Destination phone number now comes from the request instead of a
+// hardcoded constant. Accepts it in the JSON body as "phone", "to", or
+// "phoneNumber" (POST), or as a "phone"/"to" query param as a fallback for
+// quick browser/GET testing. Returns 400 with a clear message if it's
+// missing or doesn't look like a real number.
 app.all("/call", async (req, res) => {
   try {
+    const rawPhone =
+      (req.body && (req.body.phone || req.body.to || req.body.phoneNumber)) ||
+      req.query.phone ||
+      req.query.to ||
+      "";
+    const destination = normalizePhoneNumber(rawPhone);
+    if (!destination) {
+      res.status(400).json({
+        success: false,
+        message:
+          'A valid destination phone number is required, e.g. POST { "phone": "+918510994751" }, in E.164 format.',
+      });
+      return;
+    }
+
     const call = await client.calls.create({
-      to: DESTINATION_PHONE,
+      to: destination,
       from: process.env.TWILIO_PHONE_NUMBER,
       url: `https://${PUBLIC_DOMAIN}/twiml`,
       method: "GET",
     });
-    console.log(`[twilio] outbound call created: ${call.sid} -> ${DESTINATION_PHONE}`);
-    res.json({ success: true, callSid: call.sid });
+    console.log(`[twilio] outbound call created: ${call.sid} -> ${destination}`);
+    res.json({ success: true, callSid: call.sid, to: destination });
   } catch (err) {
     console.error(`[twilio] failed to create call: ${err.message}`);
     res.status(500).json({ success: false, message: err.message });
@@ -1234,7 +1429,7 @@ server.listen(PORT, () => {
   console.log(`Server listening on http://localhost:${PORT}`);
   console.log(`[deepgram] STT model: ${DEEPGRAM_MODEL}, language hints: ${DEEPGRAM_LANGUAGE_HINTS.join(", ")}`);
   console.log(`[groq] model: ${OPENAI_MODEL}`);
-  console.log(`Trigger a call:       http://localhost:${PORT}/call`);
+  console.log(`Trigger a call:       POST http://localhost:${PORT}/call  { "phone": "+91XXXXXXXXXX" }`);
   console.log(`TwiML endpoint:       https://${PUBLIC_DOMAIN}/twiml`);
   console.log(`Media stream socket:  wss://${PUBLIC_DOMAIN}/media`);
 });
