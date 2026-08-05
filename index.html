@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Call Prototype</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6">
+  <div class="w-full max-w-2xl space-y-6">
+    <header>
+      <h1 class="text-3xl font-bold text-white">Call Prototype</h1>
+      <p class="text-slate-400 mt-1">Trigger a call with Riya, the Samsung service center voice agent, and customize how she behaves.</p>
+    </header>
+
+    <section class="bg-slate-900 rounded-2xl p-6 shadow-xl border border-slate-800 space-y-4">
+      <h2 class="text-lg font-semibold text-white">Place a call</h2>
+      <form id="callForm" class="space-y-4">
+        <div>
+          <label for="phone" class="block text-sm font-medium text-slate-300 mb-1">Phone number</label>
+          <input
+            type="tel"
+            id="phone"
+            name="phone"
+            required
+            placeholder="+91XXXXXXXXXX"
+            class="w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+          <p class="text-xs text-slate-500 mt-1">E.164 format with country code, e.g. +918510994751</p>
+        </div>
+        <button
+          type="submit"
+          id="callBtn"
+          class="w-full rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-3 font-semibold text-white transition"
+        >
+          Call now
+        </button>
+      </form>
+      <div id="callResult" class="hidden rounded-lg bg-slate-800 px-4 py-3 text-sm"></div>
+    </section>
+
+    <section class="bg-slate-900 rounded-2xl p-6 shadow-xl border border-slate-800 space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-semibold text-white">Greeting message</h2>
+        <span id="greetingStatus" class="hidden text-sm text-emerald-400">Saved</span>
+      </div>
+      <textarea
+        id="greeting"
+        rows="3"
+        spellcheck="false"
+        class="w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-100 font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-emerald-500"
+      ></textarea>
+      <button
+        type="button"
+        id="saveGreetingBtn"
+        class="w-full rounded-lg bg-violet-600 hover:bg-violet-500 px-4 py-3 font-semibold text-white transition"
+      >
+        Save greeting
+      </button>
+      <p class="text-xs text-slate-500">Spoken the moment a call connects, before the caller says anything.</p>
+    </section>
+
+    <section class="bg-slate-900 rounded-2xl p-6 shadow-xl border border-slate-800 space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-semibold text-white">Agent prompt</h2>
+        <span id="promptStatus" class="hidden text-sm text-emerald-400">Saved</span>
+      </div>
+      <textarea
+        id="prompt"
+        rows="14"
+        spellcheck="false"
+        class="w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-100 font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-emerald-500"
+      ></textarea>
+      <button
+        type="button"
+        id="savePromptBtn"
+        class="w-full rounded-lg bg-sky-600 hover:bg-sky-500 px-4 py-3 font-semibold text-white transition"
+      >
+        Save prompt
+      </button>
+      <p class="text-xs text-slate-500">Changes apply to all new turns on active and future calls. The prompt is only stored in memory.</p>
+    </section>
+  </div>
+
+  <script>
+    if (window.location.protocol === "file:") {
+      document.body.insertAdjacentHTML(
+        "afterbegin",
+        '<div class="w-full max-w-2xl rounded-lg bg-red-950 border border-red-800 px-4 py-3 text-sm text-red-300 mb-6">' +
+          "Opened directly from disk. Serve the app instead: run <code>npm start</code> and open <code>http://localhost:3000</code>." +
+          "</div>"
+      );
+    }
+
+    const callForm = document.getElementById("callForm");
+    const callBtn = document.getElementById("callBtn");
+    const callResult = document.getElementById("callResult");
+    const promptEl = document.getElementById("prompt");
+    const promptStatus = document.getElementById("promptStatus");
+    const savePromptBtn = document.getElementById("savePromptBtn");
+
+    const greetingEl = document.getElementById("greeting");
+    const greetingStatus = document.getElementById("greetingStatus");
+    const saveGreetingBtn = document.getElementById("saveGreetingBtn");
+
+    async function loadPrompt() {
+      const res = await fetch("/prompt");
+      const data = await res.json();
+      promptEl.value = data.prompt || "";
+    }
+
+    async function loadGreeting() {
+      const res = await fetch("/greeting");
+      const data = await res.json();
+      greetingEl.value = data.greeting || "";
+    }
+
+    async function showResult(ok, text) {
+      callResult.classList.remove("hidden");
+      callResult.classList.toggle("bg-emerald-950", ok);
+      callResult.classList.toggle("bg-red-950", !ok);
+      callResult.classList.toggle("text-emerald-300", ok);
+      callResult.classList.toggle("text-red-300", !ok);
+      callResult.textContent = text;
+    }
+
+    callForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      callBtn.disabled = true;
+      callBtn.textContent = "Calling...";
+      callResult.classList.add("hidden");
+      try {
+        const res = await fetch("/call", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone: document.getElementById("phone").value }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          await showResult(true, `Call initiated to ${data.to}. Call SID: ${data.callSid}`);
+        } else {
+          await showResult(false, data.message || "Failed to place the call.");
+        }
+      } catch (err) {
+        await showResult(false, "Network error: " + err.message);
+      } finally {
+        callBtn.disabled = false;
+        callBtn.textContent = "Call now";
+      }
+    });
+
+    savePromptBtn.addEventListener("click", async () => {
+      savePromptBtn.disabled = true;
+      savePromptBtn.textContent = "Saving...";
+      promptStatus.classList.add("hidden");
+      try {
+        const res = await fetch("/prompt", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt: promptEl.value }),
+        });
+        if (res.ok) {
+          promptStatus.classList.remove("hidden");
+          setTimeout(() => promptStatus.classList.add("hidden"), 2500);
+        } else {
+          const data = await res.json();
+          alert(data.message || "Failed to save prompt.");
+        }
+      } catch (err) {
+        alert("Network error: " + err.message);
+      } finally {
+        savePromptBtn.disabled = false;
+        savePromptBtn.textContent = "Save prompt";
+      }
+    });
+
+    saveGreetingBtn.addEventListener("click", async () => {
+      saveGreetingBtn.disabled = true;
+      saveGreetingBtn.textContent = "Saving...";
+      greetingStatus.classList.add("hidden");
+      try {
+        const res = await fetch("/greeting", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ greeting: greetingEl.value }),
+        });
+        if (res.ok) {
+          greetingStatus.classList.remove("hidden");
+          setTimeout(() => greetingStatus.classList.add("hidden"), 2500);
+        } else {
+          const data = await res.json();
+          alert(data.message || "Failed to save greeting.");
+        }
+      } catch (err) {
+        alert("Network error: " + err.message);
+      } finally {
+        saveGreetingBtn.disabled = false;
+        saveGreetingBtn.textContent = "Save greeting";
+      }
+    });
+
+    loadPrompt();
+    loadGreeting();
+  </script>
+</body>
+</html>

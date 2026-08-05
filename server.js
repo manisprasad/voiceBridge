@@ -74,33 +74,13 @@ const OPENAI_MODEL = process.env.OPENAI_MODEL || "llama-3.1-8b-instant";
 // a recent rolling window instead.
 const MAX_HISTORY_MESSAGES = Number(process.env.MAX_HISTORY_MESSAGES) || 6;
 
-const SYSTEM_PROMPT = `You are Riya, a customer service voice agent for a Samsung authorized service center in India, talking to a customer on a phone call.
-
-How you talk:
-- Sound like a real human support agent, not a script. Warm, natural, a little conversational - use small acknowledgements like "okay", "got it", "sure" where natural.
-- Keep every reply under 400 characters. Shorter is better - this is a live phone call, not a chat. Say only what's needed to move the conversation forward, then let the customer respond.
-- Use short sentences. Long run-on sentences delay your own voice on this call, so break ideas into separate short sentences instead of one long one.
-- Never use markdown, bullet points, asterisks, numbered lists, or emojis - this is spoken audio, not text on a screen.
-- Ask one question at a time. Don't stack multiple questions in one reply.
-- Speak plainly - no corporate jargon, no reading out long disclaimers unless the customer specifically asks for policy details.
-
-What you help with:
-- Samsung product issues (phones, TVs, appliances, tablets, wearables) - basic troubleshooting, understanding the problem, and when needed, guiding the customer to book a repair or visit the service center.
-- Checking on repair/service status, warranty questions, and general service center info (hours, what to bring, estimated timelines) at a general level.
-- If you don't have specific account or ticket details in front of you, say so plainly and offer to note it down or connect them further, rather than guessing or inventing order numbers, ticket IDs, or repair costs.
-- Stay on topic - you're here for Samsung service center support, not general chit-chat, though a brief friendly moment is fine.
-
-Ending the call:
-- You have an end_call function. Call it once the conversation is genuinely finished - the customer says goodbye, confirms there's nothing else they need, or explicitly asks to hang up.
-- Always say a short, warm goodbye in your spoken reply FIRST, then call end_call in that same turn. Never call end_call silently without saying goodbye.
-- Never write the word "end_call", any JSON, or any function-call syntax in your reply text. The reply text is spoken aloud to the customer - it must only contain the words you want the customer to hear. To end the call, use the end_call function instead.
-- Don't call end_call while the customer still seems to be asking something or is mid-thought.`;
+let SYSTEM_PROMPT = `You are a helpful, polite, and concise AI assistant on a phone call. You are speaking to a human caller. You can only respond with text, and you cannot make any assumptions about the caller's identity or context beyond what they tell you. You should always be polite and professional, and you should never say anything that could be considered offensive or inappropriate. If the caller asks you to do something that is illegal or unethical, you should politely decline. If the caller asks you to end the call, you should do so immediately. and keep sentence short not so long.`;
 
 // Spoken the moment the call connects, before the caller says anything.
 // Kept as fixed text (not an LLM call) so it starts playing as fast as
 // possible and is 100% predictable for a first impression.
-const GREETING_TEXT =
-  "Hi, thanks for calling Samsung service support, this is Riya. How can I help you today?";
+let GREETING_TEXT =
+  "Hello! Thank you for calling VoiceBridge.[pause] What can I do for you today?";
 const SEPARATOR = "=".repeat(36);
 
 // Standard OpenAI-compatible function calling (Chat Completions format).
@@ -150,8 +130,53 @@ const server = http.createServer(app);
 
 app.use(express.json());
 
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  if (req.method === "OPTIONS") {
+    res.sendStatus(204);
+    return;
+  }
+  next();
+});
+
 app.get("/health", (req, res) => {
   res.json({ status: "ok" });
+});
+
+app.get("/", (req, res) => {
+  res.sendFile(__dirname + "/index.html");
+});
+
+app.get("/prompt", (req, res) => {
+  res.json({ prompt: SYSTEM_PROMPT });
+});
+
+app.post("/prompt", (req, res) => {
+  const prompt = req.body && typeof req.body.prompt === "string" ? req.body.prompt : "";
+  if (!prompt.trim()) {
+    res.status(400).json({ success: false, message: "Prompt cannot be empty." });
+    return;
+  }
+  SYSTEM_PROMPT = prompt;
+  console.log("[prompt] system prompt updated from UI");
+  res.json({ success: true });
+});
+
+app.get("/greeting", (req, res) => {
+  res.json({ greeting: GREETING_TEXT });
+});
+
+app.post("/greeting", (req, res) => {
+  const greeting = req.body && typeof req.body.greeting === "string" ? req.body.greeting : "";
+  if (!greeting.trim()) {
+    res.status(400).json({ success: false, message: "Greeting cannot be empty." });
+    return;
+  }
+  GREETING_TEXT = greeting;
+  console.log("[greeting] greeting updated from UI");
+  res.json({ success: true });
 });
 
 const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
