@@ -83,6 +83,8 @@
   </div>
 
   <script>
+    const API_BASE = "https://voicebridge-bf3c.onrender.com";
+
     if (window.location.protocol === "file:") {
       document.body.insertAdjacentHTML(
         "afterbegin",
@@ -104,13 +106,13 @@
     const saveGreetingBtn = document.getElementById("saveGreetingBtn");
 
     async function loadPrompt() {
-      const res = await fetch("/prompt");
+      const res = await fetch(`${API_BASE}/prompt`);
       const data = await res.json();
       promptEl.value = data.prompt || "";
     }
 
     async function loadGreeting() {
-      const res = await fetch("/greeting");
+      const res = await fetch(`${API_BASE}/greeting`);
       const data = await res.json();
       greetingEl.value = data.greeting || "";
     }
@@ -130,7 +132,7 @@
       callBtn.textContent = "Calling...";
       callResult.classList.add("hidden");
       try {
-        const res = await fetch("/call", {
+        const res = await fetch(`${API_BASE}/call`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ phone: document.getElementById("phone").value }),
@@ -154,7 +156,7 @@
       savePromptBtn.textContent = "Saving...";
       promptStatus.classList.add("hidden");
       try {
-        const res = await fetch("/prompt", {
+        const res = await fetch(`${API_BASE}/prompt`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ prompt: promptEl.value }),
@@ -179,7 +181,7 @@
       saveGreetingBtn.textContent = "Saving...";
       greetingStatus.classList.add("hidden");
       try {
-        const res = await fetch("/greeting", {
+        const res = await fetch(`${API_BASE}/greeting`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ greeting: greetingEl.value }),
