@@ -60,11 +60,13 @@ const FISH_FINISH_TIMEOUT_MS = Number(process.env.FISH_FINISH_TIMEOUT_MS) || 300
 
 const DG_OPEN = 1;
 
-// Gemini's Flash-Lite tier is tuned for low latency and low cost on
-// phone-call turns. If your LLM TTFT logs are consistently high, the
-// model itself (not your pipeline) is very likely the bottleneck - swap
-// LLM_MODEL to a faster Gemini variant and compare the [latency] lines.
-const LLM_MODEL = process.env.LLM_MODEL || "models/gemini-2.5-flash-lite";
+// Groq's own pitch is sub-200-300ms time-to-first-token on their
+// classic Llama models. If your LLM TTFT logs are consistently well
+// above that, the model itself (not your pipeline) is very likely the
+// bottleneck - try swapping OPENAI_MODEL to something like
+// "llama-3.1-8b-instant" and compare the [latency] LLM TTFT lines
+// against 70b-versatile.
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "llama-3.1-8b-instant";
 
 // Caps how much conversation history gets sent to the LLM on every turn
 // (system message is always kept). Unbounded history means every turn on
@@ -80,7 +82,7 @@ Everything you output is sent DIRECTLY to text-to-speech and spoken aloud. Every
 - NEVER write stage directions or actions in asterisks/parentheses (e.g. *glances at resume*, *pauses*, (laughs)). These get read aloud as literal garbled text — not supported.
 - ONLY use the approved [bracket] tags below. Nothing else in brackets.
 - No meta-commentary, no scene-setting, no describing what you are doing — only what you are saying.
-- Never write JSON, function-call syntax, or any other structured text. Only plain speech, plus the [[END_CALL]] token (see below) when ending.
+- Never write JSON, function-call syntax, or any other structured text. Only plain speech. When the call should end, you end it by calling the end_call function (see "Ending the call" below) — never by writing any special text token.
 - If Manish's answer is garbled or unclear, do NOT explain what you think he meant ("It seems like you are referring to X..."). Either treat it as understood and move on naturally ("Okay, three years with React — got it."), or ask ONE short clarifying question ("Sorry, could you say that again?"). Never both in the same turn.
 
 ## One beat per turn
@@ -128,25 +130,18 @@ The greeting has already been spoken before you start. Then run the pre-screen, 
 - No overpraising ("Excellent!", "Brilliant!", "Amazing!", "Great answer!").
 - Responses stay short — 1-3 sentences, like an actual phone call.
 
-## Ending the Call
-The call ends in two situations: (1) the screening flow is complete (including the interview scheduling step), or (2) Manish indicates he wants to stop or reschedule.
+## Ending the call — use the end_call FUNCTION, never a text token
+The call must run through ALL 10 flow steps before you may end it, unless Manish himself asks to end it. Never end early — not after the greeting, not after the first question, not after a single answer. Keep the conversation moving until the screening is complete.
 
-If Manish wants to stop or reschedule (e.g. "call me later," "can we do this another time," "I have to go," "not a good time," "can you call back"):
-- Do not argue, negotiate, or invent excuses to keep him on the line.
-- Briefly acknowledge and let him go — e.g. "No problem, I will have someone follow up to reschedule."
-- Then, on a new line: [[END_CALL]]
+A function called end_call is available to you. That function is the ONLY way a call ends. When you want to hang up, you call it. You NEVER write the literal text "[[END_CALL]]", "END_CALL", or "end_call" — if that text appears in your reply, it gets spoken aloud as garbled speech and hangs up the call wrongly.
 
-If Manish declines to schedule the interview:
-- Acknowledge it politely and briefly — e.g. "Understood, no worries at all." Then wrap up and end the call.
+Call end_call ONLY in one of these situations:
 
-If the screening flow is naturally complete (interview successfully scheduled, or he declined scheduling):
-- Say, warmly: "Nice to talk to you, Manish! We will be in touch."
-- Then, on a new line: [[END_CALL]]
+1. ALL 10 flow steps are complete (interview scheduled, or the scheduling step naturally wrapped up). Briefly acknowledge completion, say "Nice to talk to you, Manish! We will be in touch.", then call end_call. The phrase "Nice to talk to you" must always be spoken in your reply before you call end_call.
+2. Manish explicitly says he wants to stop or reschedule (e.g. "call me back," "not a good time," "I have to go," "can we do this another time"). Do not argue or keep him on the line. Acknowledge briefly, e.g. "No problem, we will reschedule," then call end_call.
+3. Manish explicitly asks to be removed from consideration, or is abusive — brief polite goodbye, then call end_call.
 
-Rules:
-- "Nice to talk to you" must be said before the call ends.
-- [[END_CALL]] must never appear mid-sentence or be spoken — it is a control signal, not something Manish hears.
-- If the call is not ending, never include [[END_CALL]].
+NEVER call end_call in any other situation. In particular: after your very first question, after hearing the caller say "yes" or "yeah", or after any intermediate answer, you MUST continue the screening with the next step.
 
 ## No Contractions
 Do not use contractions anywhere in your responses. Always use the full expanded form of every word.
@@ -181,13 +176,13 @@ const TOOLS = [
     function: {
       name: "end_call",
       description:
-        "Ends the phone call. Call this once the conversation is naturally finished - e.g. the customer says goodbye, confirms they don't need anything else, or explicitly asks to hang up. Always say a brief, polite goodbye in your reply text in the SAME turn before calling this.",
+        "Ends the phone call. This is the ONLY way the call ever ends. Use it ONLY when one of these is true: (1) the entire pre-screening interview is finished — every required topic has been covered and the interview has been either scheduled or explicitly declined; (2) the caller explicitly says goodbye, asks to hang up, or asks to stop/reschedule mid-way. NEVER use it when the caller is still engaged. In particular, never call it right after the greeting, after the first question, or whenever the caller simply says 'yes', 'yeah', 'ok', or 'good'. If that happens, keep asking your next question. Always speak a brief, polite farewell as your reply text in the SAME turn before calling this.",
       parameters: {
         type: "object",
         properties: {
           reason: {
             type: "string",
-            description: "Short internal note on why the call is ending, e.g. 'customer said goodbye'.",
+            description: "Short internal note on why the call is ending, e.g. 'all 10 screening topics complete, interview scheduled' or 'caller asked to reschedule'.",
           },
         },
         required: [],
@@ -201,7 +196,7 @@ const REQUIRED_ENV = [
   "TWILIO_AUTH_TOKEN",
   "TWILIO_PHONE_NUMBER",
   "DEEPGRAM_API_KEY",
-  "GEMINI_API_KEY",
+  "GROQ_API_KEY",
   "FISH_API_KEY",
 ];
 
@@ -268,11 +263,9 @@ app.post("/greeting", (req, res) => {
 
 const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 const deepgram = new DeepgramClient({ apiKey: process.env.DEEPGRAM_API_KEY });
-// Gemini exposes an OpenAI-compatible API, so the openai client works
-// unchanged against it - just pointed at Google's endpoint.
-const llm = new OpenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-  baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
+const groq = new OpenAI({
+  apiKey: process.env.GROQ_API_KEY,
+  baseURL: "https://api.groq.com/openai/v1",
 });
 
 const conversations = new Map();
@@ -477,6 +470,21 @@ function handleFunctionCall(ctx, call) {
   } catch (err) {
     // Arguments weren't valid JSON - not fatal, just skip the reason.
   }
+
+  // Safety net against premature hangs-up: some models call end_call on the
+  // VERY FIRST user turn (right after the greeting) before the screening has
+  // started. A real end_call can only legitimately happen after the model has
+  // already replied at least once - so if the conversation history has no
+  // assistant message yet, treat the call as spurious and keep going.
+  const history = conversations.get(ctx.callSid) || [];
+  const hasAssistantTurn = history.some((m) => m.role === "assistant");
+  if (!hasAssistantTurn) {
+    console.warn(
+      `[call ${ctx.callSid}] end_call ignored: called before the assistant has replied even once (premature hang-up guard)`
+    );
+    return;
+  }
+
   console.log(`[call ${ctx.callSid}] end_call tool invoked${reason ? `: ${reason}` : ""}`);
   ctx.pendingHangup = true;
   scheduleHangupIfNeeded(ctx);
@@ -966,9 +974,9 @@ async function streamAssistantResponse(ctx, userText, genId) {
         return null;
       });
 
-    const stream = await llm.chat.completions.create(
+    const stream = await groq.chat.completions.create(
       {
-        model: LLM_MODEL,
+        model: OPENAI_MODEL,
         stream: true,
         messages: history,
         tools: TOOLS,
@@ -1542,7 +1550,7 @@ wss.on("connection", (ws) => {
 server.listen(PORT, () => {
   console.log(`Server listening on http://localhost:${PORT}`);
   console.log(`[deepgram] STT model: ${DEEPGRAM_MODEL}, language hints: ${DEEPGRAM_LANGUAGE_HINTS.join(", ")}`);
-  console.log(`[llm] model: ${LLM_MODEL}`);
+  console.log(`[groq] model: ${OPENAI_MODEL}`);
   console.log(`Trigger a call:       POST http://localhost:${PORT}/call  { "phone": "+91XXXXXXXXXX" }`);
   console.log(`TwiML endpoint:       https://${PUBLIC_DOMAIN}/twiml`);
   console.log(`Media stream socket:  wss://${PUBLIC_DOMAIN}/media`);
