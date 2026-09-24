@@ -60,12 +60,11 @@ const FISH_FINISH_TIMEOUT_MS = Number(process.env.FISH_FINISH_TIMEOUT_MS) || 300
 
 const DG_OPEN = 1;
 
-// Groq's own pitch is sub-200-300ms time-to-first-token on their classic
-// Llama models. If your LLM TTFT logs are consistently well above that,
-// the model itself (not your pipeline) is very likely the bottleneck -
-// try swapping OPENAI_MODEL to something like "llama-3.1-8b-instant" and
-// compare the [latency] LLM TTFT lines against 70b-versatile.
-const OPENAI_MODEL = process.env.OPENAI_MODEL || "llama-3.1-8b-instant";
+// Gemini's Flash-Lite tier is tuned for low latency and low cost on
+// phone-call turns. If your LLM TTFT logs are consistently high, the
+// model itself (not your pipeline) is very likely the bottleneck - swap
+// LLM_MODEL to a faster Gemini variant and compare the [latency] lines.
+const LLM_MODEL = process.env.LLM_MODEL || "models/gemini-2.5-flash-lite";
 
 // Caps how much conversation history gets sent to the LLM on every turn
 // (system message is always kept). Unbounded history means every turn on
@@ -74,15 +73,15 @@ const OPENAI_MODEL = process.env.OPENAI_MODEL || "llama-3.1-8b-instant";
 // a recent rolling window instead.
 const MAX_HISTORY_MESSAGES = Number(process.env.MAX_HISTORY_MESSAGES) || 12;
 
-let SYSTEM_PROMPT = `You are Nancy, an HR recruiter at TechNova Solutions. You've been doing this job about 4 years and do 3-4 of these screening calls a day, so this is routine for you — not a big deal, but you're still attentive. You're calling Rahul for a first-round phone screen for a Backend Developer role (~1 year experience required).
+let SYSTEM_PROMPT = `You are a friendly, professional AI HR pre-screening agent calling Manish, who just applied for the Software Developer position. You do a few of these screening calls every day, so this is routine for you — efficient and natural, never robotic and never friendly-for-the-sake-of-it.
 
 ## CRITICAL: Output = Speech
-Everything you output is sent DIRECTLY to text-to-speech and spoken aloud. Every word you write is a word Rahul hears.
+Everything you output is sent DIRECTLY to text-to-speech and spoken aloud. Every word you write is a word Manish hears.
 - NEVER write stage directions or actions in asterisks/parentheses (e.g. *glances at resume*, *pauses*, (laughs)). These get read aloud as literal garbled text — not supported.
 - ONLY use the approved [bracket] tags below. Nothing else in brackets.
-- No meta-commentary, no scene-setting, no describing what Nancy is doing — only what she's saying.
+- No meta-commentary, no scene-setting, no describing what you are doing — only what you are saying.
 - Never write JSON, function-call syntax, or any other structured text. Only plain speech, plus the [[END_CALL]] token (see below) when ending.
-- If Rahul's answer is garbled or unclear, do NOT explain what you think he meant ("It seems like you're referring to X..."). Either treat it as understood and move on naturally ("Okay, Redis for caching — got it."), or ask ONE short clarifying question ("Sorry, could you say that again?"). Never both in the same turn.
+- If Manish's answer is garbled or unclear, do NOT explain what you think he meant ("It seems like you are referring to X..."). Either treat it as understood and move on naturally ("Okay, three years with React — got it."), or ask ONE short clarifying question ("Sorry, could you say that again?"). Never both in the same turn.
 
 ## One beat per turn
 Each response contains exactly ONE of: acknowledgment+question, OR clarifying question, OR short reaction, OR small talk/transition. Never stack two (e.g. never "correction + explanation + next question" in one response). If a draft response has more than one beat, cut it down.
@@ -96,52 +95,58 @@ This runs on a lower-reliability TTS tier, so stick to simple, low-risk tags onl
 - For any other "human" texture (hesitation, amusement, mild surprise), use WORDS instead of tags — e.g. "Ha, okay" instead of [chuckle]; "hm" instead of [sigh]; "right, um—" instead of [exhale]. Wording always renders correctly; tags don't.
 
 ## Grounding details (use naturally, don't force all of them)
-- You have Rahul's resume open in a tab, sometimes take a second to check something before responding.
-- Mid-shift, done a couple of these calls already today — a little efficient/brisk, not fresh and chirpy.
+- You have Manish's application open in a tab, sometimes take a second to check something before responding.
+- Mid-shift, done a couple of these calls already today — a little efficient and brisk, not fresh and chirpy.
 - Occasionally interrupted by normal stuff — typing sound, "sorry, one sec," a notification.
 - Don't over-explain yourself. Real recruiters move things along.
 
 ## What makes this NOT sound like AI
-- Don't summarize/restate what Rahul said ("So what you're saying is...").
-- Follow-ups should sound tired-but-competent, not textbook: "Wait, was that REST or GraphQL?" not "Could you elaborate on your API design choices?"
-- Okay to trail off/restart a sentence: "So when you were— actually, let's back up. What was your role there?"
+- Don't summarize/restate what Manish said ("So what you are saying is...").
+- Follow-ups should sound casual and competent, not textbook: "Just to check — that is three years, right?" not "Could you confirm your years of experience?"
+- Okay to trail off/restart a sentence: "So when you were— actually, let us back up. What is your current role?"
 - No narrating actions in full sentences ("Let me pull that up now") — do it inline, briefly, if at all.
 - Vary acknowledgements, don't repeat: "Okay." / "Alright." / "Got it." / "Fair enough." / "I see."
-- Sometimes skip reaction entirely and move straight to the next line.
+- Sometimes skip reaction entirely and move straight to the next question.
 
 ## Flow
-1. Greet Rahul,
-2. Ask for time have 5 to 10 min,
-if yes then proceed otherwise say NO problme we will call you back
-3. Ask him to introduce himself / walk through his background.
-4. Technical questions ONE AT A TIME, based on what he's mentioned (JS/TS, Node, Express, REST APIs, SQL/Postgres, Mongo, Redis, async/await, event loop, error handling, Git, Docker basics, caching, auth/JWT).
-5. Short natural follow-up only if an answer is thin. No teaching, no hints, no confirming correctness.
-6. If he doesn't know something: brief acknowledgment, move on.
-7. No more than one real question per turn.
+The greeting has already been spoken before you start. Then run the pre-screen, ONE topic at a time:
+
+1. Confirm it is a good time — "Is this still a good time for a quick pre-screening call?" If not, offer to call back later.
+2. Current experience — years of experience, current role, and what they work on.
+3. Notice period — how soon they could join.
+4. Location — current city and whether they are open to relocating.
+5. Work preference — remote, hybrid, or onsite.
+6. Expected salary — current and expected pay.
+7. Relevant skills — languages, frameworks, tools.
+8. Availability — good days and times for an interview.
+9. Basic technical screening — one or two short questions on coding basics or CS fundamentals, based on what they mentioned.
+10. Interview scheduling — propose a time slot and ask if they want to lock it in. Manish will either decline scheduling or confirm a slot; handle either naturally.
 
 ## Hard rules
-- One question at a time, always.
-- No teaching or explaining concepts.
+- One question at a time, always. Wait for the answer before moving to the next topic.
+- No teaching or explaining concepts, even if he answers incorrectly.
 - No overpraising ("Excellent!", "Brilliant!", "Amazing!", "Great answer!").
 - Responses stay short — 1-3 sentences, like an actual phone call.
 
 ## Ending the Call
-The call ends in two situations: (1) the interview flow is complete, or (2) Rahul indicates he wants to stop/reschedule.
+The call ends in two situations: (1) the screening flow is complete (including the interview scheduling step), or (2) Manish indicates he wants to stop or reschedule.
 
-If Rahul wants to stop or reschedule (e.g. "call me later," "can we do this another time," "I have to go," "not a good time," "can you call back"):
+If Manish wants to stop or reschedule (e.g. "call me later," "can we do this another time," "I have to go," "not a good time," "can you call back"):
 - Do not argue, negotiate, or invent excuses to keep him on the line.
-- Briefly acknowledge and let him go — e.g. "No problem, I'll have someone follow up to reschedule."
+- Briefly acknowledge and let him go — e.g. "No problem, I will have someone follow up to reschedule."
 - Then, on a new line: [[END_CALL]]
 
-If the interview flow is naturally complete:
-- Thank him for his time, mention the team will review and follow up, wish him well.
+If Manish declines to schedule the interview:
+- Acknowledge it politely and briefly — e.g. "Understood, no worries at all." Then wrap up and end the call.
+
+If the screening flow is naturally complete (interview successfully scheduled, or he declined scheduling):
+- Say, warmly: "Nice to talk to you, Manish! We will be in touch."
 - Then, on a new line: [[END_CALL]]
 
 Rules:
-- [[END_CALL]] must never appear mid-sentence or be spoken — it is a control signal, not something Rahul hears.
+- "Nice to talk to you" must be said before the call ends.
+- [[END_CALL]] must never appear mid-sentence or be spoken — it is a control signal, not something Manish hears.
 - If the call is not ending, never include [[END_CALL]].
-
-Got it — simplest fix: just tell Nancy to avoid contractions altogether and always spell out full words. That removes the apostrophe risk completely instead of trying to manage it.
 
 ## No Contractions
 Do not use contractions anywhere in your responses. Always use the full expanded form of every word.
@@ -162,12 +167,12 @@ This applies to every response without exception, since contractions can cause m
 // Kept as fixed text (not an LLM call) so it starts playing as fast as
 // possible and is 100% predictable for a first impression.
 let GREETING_TEXT =
-  "[pause], am I speaking with Rahul ?";
+  "Hi Manish! I'm calling regarding your application for the Software Developer position.";
 const SEPARATOR = "=".repeat(36);
 
 // Standard OpenAI-compatible function calling (Chat Completions format).
 // We rely primarily on the native structured `tool_calls` field in the
-// stream, but smaller Groq models occasionally leak the call as plain
+// stream, but smaller LLMs can occasionally leak the call as plain
 // text instead (see extractEndCallLeak below) - that's what the text-side
 // guard exists for.
 const TOOLS = [
@@ -196,7 +201,7 @@ const REQUIRED_ENV = [
   "TWILIO_AUTH_TOKEN",
   "TWILIO_PHONE_NUMBER",
   "DEEPGRAM_API_KEY",
-  "GROQ_API_KEY",
+  "GEMINI_API_KEY",
   "FISH_API_KEY",
 ];
 
@@ -263,9 +268,11 @@ app.post("/greeting", (req, res) => {
 
 const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 const deepgram = new DeepgramClient({ apiKey: process.env.DEEPGRAM_API_KEY });
-const groq = new OpenAI({
-  apiKey: process.env.GROQ_API_KEY,
-  baseURL: "https://api.groq.com/openai/v1",
+// Gemini exposes an OpenAI-compatible API, so the openai client works
+// unchanged against it - just pointed at Google's endpoint.
+const llm = new OpenAI({
+  apiKey: process.env.GEMINI_API_KEY,
+  baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
 });
 
 const conversations = new Map();
@@ -278,7 +285,7 @@ function initConversation(callSid) {
 
 function deleteConversation(callSid) {
   if (callSid && conversations.delete(callSid)) {
-    console.log(`[groq] conversation cleared for call ${callSid}`);
+    console.log(`[llm] conversation cleared for call ${callSid}`);
   }
 }
 
@@ -368,9 +375,9 @@ function findJsonObjectEnd(text, start) {
 
 const END_CALL_TOKEN = "end_call";
 
-// Safety net for a SPECIFIC failure mode: smaller Groq models (llama-3.1-8b-
-// instant in particular) occasionally don't emit end_call through the
-// structured tool_calls delta at all - they just write the literal words
+// Safety net for a SPECIFIC failure mode: smaller Gemini models
+// occasionally don't emit end_call through the structured tool_calls
+// delta at all - they just write the literal words
 // "end_call {"reason": "..."}" as normal spoken content. This only needs
 // to watch for ONE shape, since end_call is the only tool that exists.
 // Anything that could be a partially-streamed "end_call" (split across
@@ -898,7 +905,7 @@ async function streamAssistantResponse(ctx, userText, genId) {
   // A `let` declared inside `try { ... }` is scoped to that block and is
   // NOT visible inside the matching `catch (err) { ... }` block - that
   // mismatch is exactly what caused an earlier "fullResponse is not
-  // defined" crash the first time Groq's tool-call validation failed
+  // defined" crash the first time the LLM's tool-call validation failed
   // mid-stream. Declaring them up here means the catch block (which needs
   // to read fullResponse/ttsBuffer to salvage a goodbye line) can actually
   // see them.
@@ -959,9 +966,9 @@ async function streamAssistantResponse(ctx, userText, genId) {
         return null;
       });
 
-    const stream = await groq.chat.completions.create(
+    const stream = await llm.chat.completions.create(
       {
-        model: OPENAI_MODEL,
+        model: LLM_MODEL,
         stream: true,
         messages: history,
         tools: TOOLS,
@@ -1015,7 +1022,7 @@ async function streamAssistantResponse(ctx, userText, genId) {
       const { feedable, deferred, calls } = extractEndCallLeak(pendingExtract + delta.content);
       pendingExtract = deferred;
       for (const call of calls) {
-        console.warn(`[groq] call ${callSid}: caught leaked end_call text, treating as tool call`);
+        console.warn(`[llm] call ${callSid}: caught leaked end_call text, treating as tool call`);
         handleFunctionCall(ctx, call);
       }
 
@@ -1041,7 +1048,7 @@ async function streamAssistantResponse(ctx, userText, genId) {
     const finalLeak = finalizeEndCallLeak(pendingExtract);
     pendingExtract = "";
     if (finalLeak.call) {
-      console.warn(`[groq] call ${callSid}: caught leaked end_call text at stream end, treating as tool call`);
+      console.warn(`[llm] call ${callSid}: caught leaked end_call text at stream end, treating as tool call`);
       handleFunctionCall(ctx, finalLeak.call);
     }
     if (finalLeak.text) {
@@ -1101,10 +1108,10 @@ async function streamAssistantResponse(ctx, userText, genId) {
     }
   } catch (err) {
     if (abort.signal.aborted) {
-      console.log("[groq] response interrupted by barge-in");
+      console.log("[llm] response interrupted by barge-in");
     } else {
-      console.error(`[groq] request failed: ${err.message}`);
-      // Groq occasionally rejects its own streamed end_call (e.g. a
+      console.error(`[llm] request failed: ${err.message}`);
+      // Gemini occasionally rejects its own streamed end_call (e.g. a
       // truncated tool name in the validation phase) AFTER the model has
       // already written its goodbye. That text is sitting in
       // spokenAccum/ttsBuffer and would otherwise be lost, leaving the
@@ -1131,12 +1138,12 @@ async function streamAssistantResponse(ctx, userText, genId) {
             endTurn(ctx, genId);
           }
         }, FISH_FINISH_TIMEOUT_MS).unref();
-        console.log("[groq] end_call aborted by Groq mid-call - treating the goodbye as the end of the call");
+        console.log("[llm] end_call aborted by the LLM mid-call - treating the goodbye as the end of the call");
         ctx.pendingHangup = true;
         scheduleHangupIfNeeded(ctx);
         return;
       }
-      console.error("[groq] continuing to listen for the next utterance...");
+      console.error("[llm] continuing to listen for the next utterance...");
       if (tts) {
         closeFishSession(ctx, tts);
         tts = null;
@@ -1280,7 +1287,7 @@ wss.on("connection", (ws) => {
         // and let it no-op if there's truly nothing happening.
         interruptAssistant(ctx, "caller finished a new turn while AI was speaking");
         if (transcript === ctx.lastUserText) {
-          console.log(`[groq] duplicate transcript ignored: "${transcript}"`);
+          console.log(`[llm] duplicate transcript ignored: "${transcript}"`);
           return;
         }
       }
@@ -1294,7 +1301,7 @@ wss.on("connection", (ws) => {
         ctx.lastUserText = transcript;
         ctx.turnStartedAt = Date.now();
         streamAssistantResponse(ctx, transcript, genId).catch((err) => {
-          console.error(`[groq] unexpected error: ${err.message}`);
+          console.error(`[llm] unexpected error: ${err.message}`);
         });
       }
     } else {
@@ -1535,7 +1542,7 @@ wss.on("connection", (ws) => {
 server.listen(PORT, () => {
   console.log(`Server listening on http://localhost:${PORT}`);
   console.log(`[deepgram] STT model: ${DEEPGRAM_MODEL}, language hints: ${DEEPGRAM_LANGUAGE_HINTS.join(", ")}`);
-  console.log(`[groq] model: ${OPENAI_MODEL}`);
+  console.log(`[llm] model: ${LLM_MODEL}`);
   console.log(`Trigger a call:       POST http://localhost:${PORT}/call  { "phone": "+91XXXXXXXXXX" }`);
   console.log(`TwiML endpoint:       https://${PUBLIC_DOMAIN}/twiml`);
   console.log(`Media stream socket:  wss://${PUBLIC_DOMAIN}/media`);

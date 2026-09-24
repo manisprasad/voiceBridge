@@ -3,96 +3,361 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Call Prototype</title>
+  <meta name="description" content="VoiceBridge — an AI HR pre-screening agent that phones candidates, runs the interview, and scores them before scheduling the real one." />
+  <title>VoiceBridge · AI HR Pre-Screening</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            surf: "#E0E5EC",
+            ink: "#3D4852",
+            muted: "#6B7280",
+            accent: "#6C63FF",
+            accentLight: "#8B84FF",
+            teal: "#38B2AC",
+            success: "#1F7A74",
+            danger: "#C14646",
+          },
+          fontFamily: {
+            display: ['"Plus Jakarta Sans"', "sans-serif"],
+            body: ['"DM Sans"', "sans-serif"],
+          },
+          boxShadow: {
+            extruded: "9px 9px 16px rgb(163 177 198 / 0.6), -9px -9px 16px rgb(255 255 255 / 0.5)",
+            "extruded-sm": "5px 5px 10px rgb(163 177 198 / 0.6), -5px -5px 10px rgb(255 255 255 / 0.5)",
+            "extruded-hover": "12px 12px 20px rgb(163 177 198 / 0.7), -12px -12px 20px rgb(255 255 255 / 0.6)",
+            "extruded-lg": "16px 16px 28px rgb(163 177 198 / 0.65), -16px -16px 28px rgb(255 255 255 / 0.55)",
+            inset: "inset 6px 6px 10px rgb(163 177 198 / 0.6), inset -6px -6px 10px rgb(255 255 255 / 0.5)",
+            "inset-deep": "inset 10px 10px 20px rgb(163 177 198 / 0.7), inset -10px -10px 20px rgb(255 255 255 / 0.6)",
+            "inset-sm": "inset 3px 3px 6px rgb(163 177 198 / 0.6), inset -3px -3px 6px rgb(255 255 255 / 0.5)",
+          },
+          animation: {
+            float: "float 3s ease-in-out infinite",
+            "float-slow": "float 5s ease-in-out infinite",
+          },
+          keyframes: {
+            float: {
+              "0%, 100%": { transform: "translateY(0)" },
+              "50%": { transform: "translateY(-14px)" },
+            },
+          },
+        },
+      },
+    };
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet" />
+  <style>
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      background-color: #E0E5EC;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+
+    ::selection {
+      background: #6C63FF;
+      color: #ffffff;
+    }
+
+    /* Neumorphic inputs keep their inset depth even when the browser autofills */
+    input:-webkit-autofill,
+    input:-webkit-autofill:hover,
+    input:-webkit-autofill:focus {
+      -webkit-box-shadow: inset 10px 10px 20px rgb(163 177 198 / 0.7), inset -10px -10px 20px rgb(255 255 255 / 0.6);
+      -webkit-text-fill-color: #3D4852;
+      caret-color: #3D4852;
+      transition: background-color 600000s 0s;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+  </style>
 </head>
-<body class="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6">
-  <div class="w-full max-w-2xl space-y-6">
-    <header>
-      <h1 class="text-3xl font-bold text-white">Call Prototype</h1>
-      <p class="text-slate-400 mt-1">Trigger a call with Riya, the Samsung service center voice agent, and customize how she behaves.</p>
-    </header>
+<body class="min-h-screen bg-surf text-ink font-body flex flex-col">
+  <!-- Sticky header -->
+  <header class="sticky top-0 z-40 bg-surf/85 backdrop-blur-md shadow-extruded-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-5 flex items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <span aria-hidden="true" class="grid place-items-center h-11 w-11 rounded-xl bg-surf text-accent shadow-extruded-sm">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" />
+          </svg>
+        </span>
+        <span class="font-display font-extrabold text-xl md:text-2xl tracking-tight text-ink">
+          Voice<span class="text-accent">Bridge</span>
+        </span>
+      </div>
+      <!-- compact online dot on mobile -->
+      <span class="inline-flex sm:hidden items-center justify-center h-11 w-11 shrink-0 rounded-full bg-surf shadow-inset-sm" aria-hidden="true">
+        <span class="relative flex h-2.5 w-2.5">
+          <span class="absolute inline-flex h-full w-full rounded-full bg-teal opacity-60 animate-ping"></span>
+          <span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-teal"></span>
+        </span>
+      </span>
+      <span class="sr-only">AI agent online</span>
+      <span class="hidden sm:inline-flex items-center gap-2 rounded-full bg-surf px-4 py-2 text-sm font-semibold text-ink shadow-inset-sm">
+        <span class="relative flex h-2.5 w-2.5" aria-hidden="true">
+          <span class="absolute inline-flex h-full w-full rounded-full bg-teal opacity-60 animate-ping"></span>
+          <span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-teal"></span>
+        </span>
+        AI agent online
+      </span>
+    </div>
+  </header>
 
-    <section class="bg-slate-900 rounded-2xl p-6 shadow-xl border border-slate-800 space-y-4">
-      <h2 class="text-lg font-semibold text-white">Place a call</h2>
-      <form id="callForm" class="space-y-4">
-        <div>
-          <label for="phone" class="block text-sm font-medium text-slate-300 mb-1">Phone number</label>
-          <input
-            type="tel"
-            id="phone"
-            name="phone"
-            required
-            placeholder="+91XXXXXXXXXX"
-            class="w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          />
-          <p class="text-xs text-slate-500 mt-1">E.164 format with country code, e.g. +918510994751</p>
+  <main class="flex-1">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <!-- Hero -->
+      <section class="relative overflow-hidden text-center py-14 sm:py-16 md:py-24">
+        <!-- nested-depth decoration (desktop only) -->
+        <div aria-hidden="true" class="hidden lg:block absolute left-0 top-10 h-56 w-56 rounded-full shadow-extruded-sm animate-float">
+          <div class="absolute inset-5 rounded-full shadow-inset-sm"></div>
+          <div class="absolute inset-12 rounded-full shadow-extruded-sm"></div>
         </div>
-        <button
-          type="submit"
-          id="callBtn"
-          class="w-full rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-3 font-semibold text-white transition"
-        >
-          Call now
-        </button>
-      </form>
-      <div id="callResult" class="hidden rounded-lg bg-slate-800 px-4 py-3 text-sm"></div>
-    </section>
+        <div aria-hidden="true" class="hidden lg:block absolute right-0 bottom-4 h-44 w-44 rounded-full shadow-extruded-sm animate-float-slow">
+          <div class="absolute inset-4 rounded-full shadow-inset-sm"></div>
+          <div class="absolute inset-10 rounded-full shadow-extruded-sm"></div>
+        </div>
 
-    <section class="bg-slate-900 rounded-2xl p-6 shadow-xl border border-slate-800 space-y-4">
-      <div class="flex items-center justify-between">
-        <h2 class="text-lg font-semibold text-white">Greeting message</h2>
-        <span id="greetingStatus" class="hidden text-sm text-emerald-400">Saved</span>
-      </div>
-      <textarea
-        id="greeting"
-        rows="3"
-        spellcheck="false"
-        class="w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-100 font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-emerald-500"
-      ></textarea>
-      <button
-        type="button"
-        id="saveGreetingBtn"
-        class="w-full rounded-lg bg-violet-600 hover:bg-violet-500 px-4 py-3 font-semibold text-white transition"
-      >
-        Save greeting
-      </button>
-      <p class="text-xs text-slate-500">Spoken the moment a call connects, before the caller says anything.</p>
-    </section>
+        <span class="inline-block rounded-full bg-surf px-5 py-2 text-sm font-bold tracking-wide uppercase text-accent shadow-inset-sm">
+          AI HR · pre-screen demo
+        </span>
 
-    <section class="bg-slate-900 rounded-2xl p-6 shadow-xl border border-slate-800 space-y-4">
-      <div class="flex items-center justify-between">
-        <h2 class="text-lg font-semibold text-white">Agent prompt</h2>
-        <span id="promptStatus" class="hidden text-sm text-emerald-400">Saved</span>
-      </div>
-      <textarea
-        id="prompt"
-        rows="14"
-        spellcheck="false"
-        class="w-full rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 text-sm text-slate-100 font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-emerald-500"
-      ></textarea>
-      <button
-        type="button"
-        id="savePromptBtn"
-        class="w-full rounded-lg bg-sky-600 hover:bg-sky-500 px-4 py-3 font-semibold text-white transition"
-      >
-        Save prompt
-      </button>
-      <p class="text-xs text-slate-500">Changes apply to all new turns on active and future calls. The prompt is only stored in memory.</p>
-    </section>
-  </div>
+        <h1 class="font-display font-extrabold tracking-tight text-ink text-4xl sm:text-5xl md:text-6xl lg:text-7xl mt-6">
+          Hire, one
+          <span class="text-accent">call</span>
+          at a time<span class="text-accent">.</span>
+        </h1>
+
+        <!-- <p class="mt-6 text-lg md:text-xl text-muted max-w-2xl mx-auto leading-relaxed px-2 sm:px-4">
+          Drop in a candidate's number and the AI agent phones them — experience,
+          notice period, salary, skills — then wraps up with a warm
+          <span class="font-semibold text-ink">"nice to talk to you."</span>
+        </p> -->
+
+        <!-- call pipeline (presentation decoration) -->
+        <!-- <div class="mx-auto mt-12 max-w-4xl" aria-hidden="true">
+          <p class="text-xs font-bold tracking-[0.2em] uppercase text-muted mb-4">The call pipeline</p>
+          <div class="flex flex-wrap items-center justify-center gap-2 md:gap-3 text-sm md:text-base font-medium px-2">
+            <span class="inline-flex items-center gap-2 rounded-2xl bg-surf px-4 py-2.5 shadow-inset-sm text-ink">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-accent"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" /></svg>
+              Twilio · phone call
+            </span>
+            <span class="text-accent font-bold shrink-0">→</span>
+            <span class="inline-flex items-center gap-2 rounded-2xl bg-surf px-4 py-2.5 shadow-inset-sm text-ink">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-accent"><path d="M12 2a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" x2="12" y1="19" y2="22" /></svg>
+              Deepgram · speech-to-text
+            </span>
+            <span class="text-accent font-bold shrink-0">→</span> -->
+            <!-- <span class="inline-flex items-center gap-2 rounded-2xl bg-surf px-4 py-2.5 shadow-inset-sm text-ink">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-accent"><rect x="4" y="4" width="16" height="16" rx="2" /><rect x="9" y="9" width="6" height="6" /><line x1="9" y1="1" x2="9" y2="4" /><line x1="15" y1="1" x2="15" y2="4" /><line x1="9" y1="20" x2="9" y2="23" /><line x1="15" y1="20" x2="15" y2="23" /><line x1="20" y1="9" x2="23" y2="9" /><line x1="20" y1="14" x2="23" y2="14" /><line x1="1" y1="9" x2="4" y2="9" /><line x1="1" y1="14" x2="4" y2="14" /></svg>
+              AI agent · decides next
+            </span>
+            <span class="text-accent font-bold shrink-0">→</span>
+            <span class="inline-flex items-center gap-2 rounded-2xl bg-surf px-4 py-2.5 shadow-inset-sm text-ink">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-accent"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M15.54 8.46a5 5 0 0 1 0 7.07" /><path d="M19.07 4.93a10 10 0 0 1 0 14.14" /></svg>
+              Fish · text-to-speech
+            </span> -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Control deck -->
+      <section class="pb-20 md:pb-28">
+        <!-- <div class="text-center mb-12 md:mb-16">
+          <h2 class="font-display font-bold text-3xl md:text-4xl tracking-tight text-ink">Control desk</h2>
+          <p class="mt-3 text-muted text-lg max-w-xl mx-auto px-2 sm:px-4">Tune exactly how the agent opens and runs the pre-screen.</p>
+        </div> -->
+
+        <div class="grid gap-10 md:gap-12 md:grid-cols-2">
+          <!-- Start a pre-screen -->
+          <section
+            class="rounded-[32px] bg-surf p-6 sm:p-8 shadow-extruded transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-extruded-hover"
+            aria-labelledby="callTitle"
+          >
+            <div class="flex items-center gap-4 mb-7">
+              <span aria-hidden="true" class="grid place-items-center h-14 w-14 shrink-0 rounded-2xl bg-surf text-accent shadow-inset-deep">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" />
+                </svg>
+              </span>
+              <div>
+                <h2 id="callTitle" class="font-display font-bold text-2xl md:text-3xl tracking-tight text-ink">Start a pre-screen</h2>
+                <p class="text-muted text-sm md:text-base mt-0.5">Call a candidate right now</p>
+              </div>
+            </div>
+
+            <form id="callForm" class="space-y-5">
+              <div>
+                <label for="phone" class="block mb-2 text-sm md:text-base font-semibold text-ink">Candidate's phone number</label>
+                <input
+                  type="tel"
+                  id="phone"
+                  name="phone"
+                  inputmode="tel"
+                  autocomplete="tel"
+                  required
+                  placeholder="+91XXXXXXXXXX"
+                  class="w-full rounded-2xl bg-surf px-4 py-3.5 sm:px-5 sm:py-4 text-lg text-ink placeholder:text-[#A0AEC0] shadow-inset focus:outline-none focus:shadow-inset-deep focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-surf transition-shadow duration-300"
+                />
+                <p class="text-sm md:text-base text-muted mt-2">E.164 format with country code, e.g. +918510994751</p>
+              </div>
+              <button
+                type="submit"
+                id="callBtn"
+                class="w-full rounded-2xl bg-accent text-white font-bold text-lg py-3.5 sm:py-4 shadow-extruded transition-all duration-300 ease-out hover:-translate-y-1 hover:bg-accentLight hover:shadow-extruded-hover active:translate-y-1 active:shadow-[inset_4px_4px_8px_rgb(255,255,255,0.3),inset_-4px_-4px_8px_rgb(0,0,0,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-surf disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-extruded disabled:hover:bg-accent"
+              >
+                Call the candidate
+              </button>
+            </form>
+
+            <div
+              id="callResult"
+              role="status"
+              aria-live="polite"
+              class="hidden rounded-2xl bg-surf px-5 py-4 mt-6 text-base md:text-lg font-semibold shadow-inset"
+            ></div>
+          </section>
+
+          <!-- Opening line -->
+          <section
+            class="rounded-[32px] bg-surf p-6 sm:p-8 shadow-extruded transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-extruded-hover"
+            aria-labelledby="greetingTitle"
+          >
+            <div class="flex flex-wrap items-center gap-4 mb-7">
+              <div class="flex items-center gap-4 min-w-0">
+                <span aria-hidden="true" class="grid place-items-center h-14 w-14 shrink-0 rounded-2xl bg-surf text-accent shadow-inset-deep">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
+                  </svg>
+                </span>
+                <div class="min-w-0">
+                  <h2 id="greetingTitle" class="font-display font-bold text-2xl md:text-3xl tracking-tight text-ink">Opening line</h2>
+                  <p class="text-muted text-sm md:text-base mt-0.5">What the agent says first</p>
+                </div>
+              </div>
+              <span
+                id="greetingStatus"
+                role="status"
+                aria-live="polite"
+                class="hidden items-center gap-1.5 rounded-full bg-surf px-4 py-2 text-sm md:text-base font-semibold text-ink shadow-inset-sm shrink-0 grow-0 ml-auto"
+              >
+                <span class="h-2 w-2 rounded-full bg-teal" aria-hidden="true"></span>
+                Saved
+              </span>
+            </div>
+
+            <div class="space-y-5">
+              <label for="greeting" class="sr-only">Opening message</label>
+              <textarea
+                id="greeting"
+                rows="4"
+                spellcheck="false"
+                class="w-full rounded-2xl bg-surf px-4 py-3.5 sm:px-5 sm:py-4 text-lg text-ink placeholder:text-[#A0AEC0] shadow-inset focus:outline-none focus:shadow-inset-deep focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-surf transition-shadow duration-300 resize-y leading-relaxed"
+              >Hi Manish! I'm calling regarding your application for the Software Developer position.</textarea>
+              <button
+                type="button"
+                id="saveGreetingBtn"
+                class="w-full rounded-2xl bg-surf text-ink font-bold text-lg py-3.5 sm:py-4 shadow-extruded transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-extruded-hover active:translate-y-1 active:shadow-inset-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surf disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-extruded"
+              >
+                Save greeting
+              </button>
+              <p class="text-sm md:text-base text-muted">"Nice to talk to you" is the goodbye — the agent signs off warmly and ends the call.</p>
+            </div>
+          </section>
+
+          <!-- Interview script -->
+          <section
+            class="rounded-[32px] bg-surf p-6 sm:p-8 shadow-extruded transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-extruded-hover md:col-span-2"
+            aria-labelledby="promptTitle"
+          >
+            <div class="flex flex-wrap items-center gap-4 mb-7">
+              <div class="flex items-center gap-4 min-w-0">
+                <span aria-hidden="true" class="grid place-items-center h-14 w-14 shrink-0 rounded-2xl bg-surf text-accent shadow-inset-deep">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063A2 2 0 0 0 14.063 15.5l-1.582 6.135a.5.5 0 0 1-.963 0z" />
+                    <path d="M20 3v4" />
+                    <path d="M22 5h-4" />
+                  </svg>
+                </span>
+                <div class="min-w-0">
+                  <h2 id="promptTitle" class="font-display font-bold text-2xl md:text-3xl tracking-tight text-ink">Interview script</h2>
+                  <p class="text-muted text-sm md:text-base mt-0.5">The agent's whole playbook</p>
+                </div>
+              </div>
+              <span
+                id="promptStatus"
+                role="status"
+                aria-live="polite"
+                class="hidden items-center gap-1.5 rounded-full bg-surf px-4 py-2 text-sm md:text-base font-semibold text-ink shadow-inset-sm shrink-0 grow-0 ml-auto"
+              >
+                <span class="h-2 w-2 rounded-full bg-teal" aria-hidden="true"></span>
+                Saved
+              </span>
+            </div>
+
+            <div class="space-y-5">
+              <label for="prompt" class="sr-only">Interview script and scoring</label>
+              <textarea
+                id="prompt"
+                rows="13"
+                spellcheck="false"
+                class="w-full rounded-2xl bg-surf px-4 py-3.5 sm:px-5 sm:py-4 text-lg text-ink placeholder:text-[#A0AEC0] shadow-inset focus:outline-none focus:shadow-inset-deep focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-surf transition-shadow duration-300 resize-y leading-relaxed"
+              >You are a friendly, professional HR pre-screening agent calling Manish, who applied for the Software Developer position. Speak naturally and ask exactly one question at a time.
+
+Run the pre-screen in this order:
+1. Confirm it is a good time for the call.
+2. Current experience — years, role, and what they work on.
+3. Notice period — how soon they could join.
+4. Location — current city and relocation comfort.
+5. Work preference — remote, hybrid, or onsite.
+6. Expected salary — current and expected pay.
+7. Relevant skills — languages, frameworks, and tools.
+8. Availability — good days and times for an interview.
+9. Basic technical screening — one or two short coding or CS fundamentals questions based on their stack.
+10. Interview scheduling — propose a time slot and ask if they want to lock it in. Handle a decline or a confirmed schedule naturally.
+
+Once the interview is scheduled (or the candidate declines scheduling), say "Nice to talk to you, Manish! We will be in touch." and then end the call.
+
+Keep responses to 1-3 sentences, short and conversational. Speak only natural speech — no stage directions, no echoing back answers, no teaching. Use [[END_CALL]] on its own line when ending the call.</textarea>
+              <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <button
+                  type="button"
+                  id="savePromptBtn"
+                  class="w-full md:w-auto md:px-10 rounded-2xl bg-surf text-ink font-bold text-lg py-3.5 sm:py-4 shadow-extruded transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-extruded-hover active:translate-y-1 active:shadow-inset-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surf disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-extruded"
+                >
+                  Save prompt
+                </button>
+                <p class="text-sm md:text-base text-muted md:text-right md:max-w-xs">
+                  Guides every question on the call. Changes apply to all new turns and are only stored in memory.
+                </p>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 pb-12">
+    <p class="text-center text-muted text-sm font-medium">VoiceBridge · AI HR pre-screening demo</p>
+  </footer>
 
   <script>
     const API_BASE = "https://voicebridge-bf3c.onrender.com";
-
-    if (window.location.protocol === "file:") {
-      document.body.insertAdjacentHTML(
-        "afterbegin",
-        '<div class="w-full max-w-2xl rounded-lg bg-red-950 border border-red-800 px-4 py-3 text-sm text-red-300 mb-6">' +
-          "Opened directly from disk. Serve the app instead: run <code>npm start</code> and open <code>http://localhost:3000</code>." +
-          "</div>"
-      );
-    }
 
     const callForm = document.getElementById("callForm");
     const callBtn = document.getElementById("callBtn");
@@ -106,23 +371,29 @@
     const saveGreetingBtn = document.getElementById("saveGreetingBtn");
 
     async function loadPrompt() {
-      const res = await fetch(`${API_BASE}/prompt`);
-      const data = await res.json();
-      promptEl.value = data.prompt || "";
+      try {
+        const res = await fetch(`${API_BASE}/prompt`);
+        const data = await res.json();
+        if (data.prompt) promptEl.value = data.prompt;
+      } catch (err) {
+        /* keep the default script if the server is unreachable */
+      }
     }
 
     async function loadGreeting() {
-      const res = await fetch(`${API_BASE}/greeting`);
-      const data = await res.json();
-      greetingEl.value = data.greeting || "";
+      try {
+        const res = await fetch(`${API_BASE}/greeting`);
+        const data = await res.json();
+        if (data.greeting) greetingEl.value = data.greeting;
+      } catch (err) {
+        /* keep the default opening line if the server is unreachable */
+      }
     }
 
     async function showResult(ok, text) {
       callResult.classList.remove("hidden");
-      callResult.classList.toggle("bg-emerald-950", ok);
-      callResult.classList.toggle("bg-red-950", !ok);
-      callResult.classList.toggle("text-emerald-300", ok);
-      callResult.classList.toggle("text-red-300", !ok);
+      callResult.classList.toggle("text-success", ok);
+      callResult.classList.toggle("text-danger", !ok);
       callResult.textContent = text;
     }
 
@@ -130,6 +401,7 @@
       e.preventDefault();
       callBtn.disabled = true;
       callBtn.textContent = "Calling...";
+      callForm.setAttribute("aria-busy", "true");
       callResult.classList.add("hidden");
       try {
         const res = await fetch(`${API_BASE}/call`, {
@@ -147,7 +419,8 @@
         await showResult(false, "Network error: " + err.message);
       } finally {
         callBtn.disabled = false;
-        callBtn.textContent = "Call now";
+        callBtn.textContent = "Call the candidate";
+        callForm.removeAttribute("aria-busy");
       }
     });
 
@@ -155,6 +428,7 @@
       savePromptBtn.disabled = true;
       savePromptBtn.textContent = "Saving...";
       promptStatus.classList.add("hidden");
+      savePromptBtn.closest("section").setAttribute("aria-busy", "true");
       try {
         const res = await fetch(`${API_BASE}/prompt`, {
           method: "POST",
@@ -173,6 +447,7 @@
       } finally {
         savePromptBtn.disabled = false;
         savePromptBtn.textContent = "Save prompt";
+        savePromptBtn.closest("section").removeAttribute("aria-busy");
       }
     });
 
@@ -180,6 +455,7 @@
       saveGreetingBtn.disabled = true;
       saveGreetingBtn.textContent = "Saving...";
       greetingStatus.classList.add("hidden");
+      saveGreetingBtn.closest("section").setAttribute("aria-busy", "true");
       try {
         const res = await fetch(`${API_BASE}/greeting`, {
           method: "POST",
@@ -198,6 +474,7 @@
       } finally {
         saveGreetingBtn.disabled = false;
         saveGreetingBtn.textContent = "Save greeting";
+        saveGreetingBtn.closest("section").removeAttribute("aria-busy");
       }
     });
 
