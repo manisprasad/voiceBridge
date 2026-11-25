@@ -1240,7 +1240,7 @@ app.all("/call", async (req, res) => {
       res.status(400).json({
         success: false,
         message:
-          'A valid destination phone number is required, e.g. POST { "phone": "+918510994751" }, in E.164 format.',
+          'A valid destination phone number is required, e.g. POST { "phone": "+9191111111111" }, in E.164 format.',
       });
       return;
     }
